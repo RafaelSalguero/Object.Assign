@@ -61,6 +61,8 @@ With the `Object.Assign` Linq extension we can assign only properties that are n
 ```
 using (var C = new Model()) {
     var query = C.Clients.SelectClone(x => new ClientDTO {
+        //Properties with the same name and type are automatically assigned
+
 		CanDrink = x.Age > 18,
         GroupName = x.Group.Name,
         FullName = x.FirstName + " " + x.SecondName
