@@ -25,7 +25,7 @@ namespace ObjectAssign.Test
         [TestMethod]
         public void MapTypeTest()
         {
-            var Map = ExpressionExtensions.MapTypes(typeof(Client), typeof(ClientDTO));
+            var Map = LinqEx.MapTypes(typeof(Client), typeof(ClientDTO));
 
             Assert.AreEqual(2, Map.Count);
 
@@ -39,7 +39,7 @@ namespace ObjectAssign.Test
         [TestMethod]
         public void ExpressionBindingTest()
         {
-            var Extract = ExpressionExtensions.ExtractBindings<Client, ClientDTO>(x => new ClientDTO
+            var Extract = LinqEx.ExtractBindings<Client, ClientDTO>(x => new ClientDTO
             {
                 Age = x.Age + 20,
                 LegalDrinking = x.Name == "Rafa"
@@ -58,19 +58,24 @@ namespace ObjectAssign.Test
                 new Client { Name = "Jose", Age = 17 },
             }.AsQueryable();
 
-            var Ret = ExpressionExtensions.Clone<Client, ClientDTO>().Compile().Invoke(Clients.First());
+            //Syntax test:
+            Clients.Select(LinqEx.Clone<Client, ClientDTO>(x => new ClientDTO { Age = 20 }));
+
+            Clients.SelectClone(x => new ClientDTO { Age = 20 });
+
+            var Ret = LinqEx.Clone<Client, ClientDTO>().Compile().Invoke(Clients.First());
 
             Assert.AreEqual(22, Ret.Age);
             Assert.AreEqual("Rafael", Ret.Name);
             Assert.AreEqual(false, Ret.LegalDrinking);
 
-            Ret = ExpressionExtensions.Clone<Client, ClientDTO>(x => new ClientDTO { LegalDrinking = x.Age > 18 }).Compile().Invoke(Clients.First());
+            Ret = LinqEx.Clone<Client, ClientDTO>(x => new ClientDTO { LegalDrinking = x.Age > 18 }).Compile().Invoke(Clients.First());
 
             Assert.AreEqual(22, Ret.Age);
             Assert.AreEqual("Rafael", Ret.Name);
             Assert.AreEqual(true, Ret.LegalDrinking);
 
-            var Expr = ExpressionExtensions.Clone<Client, ClientDTO>(x => new ClientDTO { LegalDrinking = x.Age > 18, Name = "Luis" });
+            var Expr = LinqEx.Clone<Client, ClientDTO>(x => new ClientDTO { LegalDrinking = x.Age > 18, Name = "Luis" });
             Ret = Expr.Compile().Invoke(Clients.First());
 
             Assert.AreEqual(22, Ret.Age);

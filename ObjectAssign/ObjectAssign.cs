@@ -12,7 +12,7 @@ namespace Tonic
     /// <summary>
     /// Exposes the assign method that create an expression that copies all properties from one object onto another
     /// </summary>
-    public static partial class ExpressionExtensions
+    public static partial class LinqEx
     {
         /// <summary>
         /// A pair of properties that are mapped from source to dest
@@ -121,6 +121,11 @@ namespace Tonic
             var Body = Expression.MemberInit(Expression.New(typeof(TOut)), Binds);
 
             return Expression.Lambda<Func<TIn, TOut>>(Body, Param);
+        }
+
+        public static IQueryable<TOut> SelectClone<T, TOut>(this IQueryable<T> query, Expression<Func<T, TOut>> otherMembers = null)
+        {
+            return query.Select(Clone(otherMembers));
         }
     }
 
