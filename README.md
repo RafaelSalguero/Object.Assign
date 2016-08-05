@@ -4,7 +4,8 @@
 Use this Linq extension to simplify the object initialization when two objects have many common properties
 
 Suppose that you have the following classes:
-```
+
+```c#
 class GroupEntity { 
     public int Id { get; set; }
     public string Name { get; set; }
@@ -38,7 +39,7 @@ class ClientDTO {
 
 If we wanted to query the database to retrive directly `ClientDTO` objects the query would be something like:
 
-```
+```c#
 using(var C = new Model()) {
     var query = C.Clients.Select( x => new ClientDTO {
         //Cloned properties:
@@ -58,7 +59,7 @@ using(var C = new Model()) {
 ```
 
 With the `Object.Assign` Linq extension we can assign only properties that are not automatically mapped by name and type:
-```
+```c#
 using (var C = new Model()) {
     var query = C.Clients.SelectClone(x => new ClientDTO {
         //Properties with the same name and type are automatically assigned
