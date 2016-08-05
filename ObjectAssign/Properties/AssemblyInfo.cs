@@ -6,11 +6,11 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("ObjectAssign")]
-[assembly: AssemblyDescription("")]
+[assembly: AssemblyDescription("Use Object.Assign like syntax in LINQ to Entities")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
+[assembly: AssemblyCompany("Rafael Salguero Iturrios")]
 [assembly: AssemblyProduct("ObjectAssign")]
-[assembly: AssemblyCopyright("Copyright ©  2016")]
+[assembly: AssemblyCopyright("Copyright © Rafael Salguero 2016")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 [assembly: InternalsVisibleTo("ObjectAssign.Test")]
