@@ -1,5 +1,5 @@
 ##Object.Assign linq extension
-
+www.nuget.org/packages/ObjectAssign/
 
 Use this Linq extension to simplify object initialization when two classes have many common properties.
 Plays nicely with Entity Framework queries
