@@ -9,6 +9,7 @@ using ObjectAssign.Visitors;
 
 namespace Tonic
 {
+
     /// <summary>
     /// Exposes the assign method that create an expression that copies all properties from one object onto another
     /// </summary>
@@ -34,11 +35,11 @@ namespace Tonic
         /// Map without using the cache
         /// </summary>
         /// <returns></returns>
-        internal static Dictionary<string, PropertyMapping> MapTypesSlow(Type Source, Type Dest)
+        internal static Dictionary<string, PropertyMapping> MapTypesSlow(IEnumerable<PropertyInfo> SourceProperties, IEnumerable<PropertyInfo> DestProperties)
         {
-            var SourceProps = Source.GetProperties().ToDictionary(x => x.Name);
+            var SourceProps = SourceProperties.ToDictionary(x => x.Name);
             return
-                Dest.GetProperties()
+                DestProperties
                 .Where(x => SourceProps.ContainsKey(x.Name))                        //Filter only properties that are both on source and dest
                 .Select(x => new { DestProp = x, SourceProp = SourceProps[x.Name] })//Map by name between
                 .Where(x => x.SourceProp.PropertyType == x.DestProp.PropertyType)   //Filter out properties with the same name but different type
@@ -58,7 +59,7 @@ namespace Tonic
             Dictionary<string, PropertyMapping> Result;
             if (!Mappings.TryGetValue(Key, out Result))
             {
-                Result = MapTypesSlow(Source, Dest);
+                Result = MapTypesSlow(Source.GetProperties(), Dest.GetProperties());
                 Mappings.Add(Key, Result);
             }
             return Result;
@@ -96,9 +97,9 @@ namespace Tonic
             return result;
         }
 
+
         /// <summary>
         /// Create an expression that initialize an object of type TOut with all properties of type TIn using the member initizer sintax
-        /// Property mapping between types is done with the MapTypes method.
         /// The user can override or add new member bindings
         /// </summary>
         /// <typeparam name="TIn">The source type</typeparam>
@@ -107,7 +108,21 @@ namespace Tonic
         /// <returns></returns>
         public static Expression<Func<TIn, TOut>> Clone<TIn, TOut>(Expression<Func<TIn, TOut>> otherMembers = null)
         {
-            var Props = MapTypes(typeof(TIn), typeof(TOut));
+            return Clone(otherMembers, x => true);
+        }
+
+        /// <summary>
+        /// Create an expression that initialize an object of type TOut with all properties of type TIn using the member initizer sintax
+        /// The user can override or add new member bindings
+        /// </summary>
+        /// <typeparam name="TIn">The source type</typeparam>
+        /// <typeparam name="TOut">The object of the type that will be member initialized</typeparam>
+        /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
+        /// <param name="PropertyMappingPredicate">After the properties where matched by type and name, a filter with this predicate is applied to the property mappings</param>
+        /// <returns></returns>
+        public static Expression<Func<TIn, TOut>> Clone<TIn, TOut>(Expression<Func<TIn, TOut>> otherMembers, Func<PropertyMapping, bool> PropertyMappingPredicate)
+        {
+            var Props = MapTypes(typeof(TIn), typeof(TOut)).Where(x => PropertyMappingPredicate(x.Value));
 
             var Param = Expression.Parameter(typeof(TIn), "cloneInput");
             var OtherBindings = otherMembers == null ? new Dictionary<string, MemberAssignment>() : ExtractBindings(otherMembers, Param);
@@ -123,9 +138,52 @@ namespace Tonic
             return Expression.Lambda<Func<TIn, TOut>>(Body, Param);
         }
 
+        /// <summary>
+        /// Call the Select method from the given queryable with the clone expression
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="TOut"></typeparam>
+        /// <param name="query">The query to proyect</param>
+        /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
+        /// <returns></returns>
         public static IQueryable<TOut> SelectClone<T, TOut>(this IQueryable<T> query, Expression<Func<T, TOut>> otherMembers = null)
         {
             return query.Select(Clone(otherMembers));
+        }
+
+        static bool IsSimpleType(this Type type)
+        {
+            return
+                type.IsValueType ||
+                type.IsPrimitive ||
+                type == typeof(string);
+        }
+
+        /// <summary>
+        /// Call the Select method from the given queryable with the clone expression. Only properties that have 'simple' types are copied by default. All value-types, primitive types, and the string type are considered simple
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="TOut"></typeparam>
+        /// <param name="query">The query to proyect</param>
+        /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
+        /// <returns></returns>
+        public static IQueryable<TOut> SelectCloneSimple<T, TOut>(this IQueryable<T> query, Expression<Func<T, TOut>> otherMembers = null)
+        {
+            return query.Select(Clone(otherMembers, x => IsSimpleType(x.Dest.PropertyType)));
+        }
+
+        /// <summary>
+        /// Call the Select method from the given queryable with the clone expression
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="TOut"></typeparam>
+        /// <param name="query">The query to proyect</param>
+        /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
+        /// <param name="PropertyMappingPredicate">After the properties where matched by type and name, a filter with this predicate is applied to the property mappings</param>
+        /// <returns></returns>
+        public static IQueryable<TOut> SelectClone<T, TOut>(this IQueryable<T> query, Expression<Func<T, TOut>> otherMembers, Func<PropertyMapping, bool> PropertyMappingPredicate)
+        {
+            return query.Select(Clone(otherMembers, PropertyMappingPredicate));
         }
     }
 
