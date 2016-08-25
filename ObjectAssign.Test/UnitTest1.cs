@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -51,7 +52,25 @@ namespace ObjectAssign.Test
         }
 
         [TestMethod]
-        public void MemberInitTest()
+        public void PopulateObjectTest()
+        {
+            var Source = new Client { Name = "Rafael", Age = 22 };
+            var Dest = new ClientDTO();
+
+            LinqEx.PopulateObject(Source, Dest, 
+                new Dictionary<string, object> {
+                    { "Age", 20 },
+                    {"LegalDrinking", true }
+                }, 
+                x => true);
+
+            Assert.AreEqual("Rafael", Dest.Name);
+            Assert.AreEqual(20, Dest.Age);
+            Assert.AreEqual(true, Dest.LegalDrinking);
+        }
+
+        [TestMethod]
+        public void MemberInitTestImmediate()
         {
             var Clients = new Client[]
             {

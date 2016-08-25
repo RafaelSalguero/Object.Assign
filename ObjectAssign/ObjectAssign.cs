@@ -37,7 +37,7 @@ namespace Tonic
         /// <returns></returns>
         internal static Dictionary<string, PropertyMapping> MapTypesSlow(IEnumerable<PropertyInfo> SourceProperties, IEnumerable<PropertyInfo> DestProperties)
         {
-            var SourceProps = SourceProperties.ToDictionary(x => x.Name);
+            var SourceProps = SourceProperties.ToDictionary(x => new { x.Name, x.Type });
             return
                 DestProperties
                 .Where(x => SourceProps.ContainsKey(x.Name))                        //Filter only properties that are both on source and dest
@@ -112,6 +112,49 @@ namespace Tonic
         }
 
         /// <summary>
+        /// Clone properties from the source object onto the dest object mapping properties by type and name.
+        /// </summary>
+        /// <param name="Dest">The object that will be populated</param>
+        /// <param name="Source">The object to read properties from</param>
+        public static void PopulateObject(object Source, object Dest)
+        {
+            PopulateObject(Source, Dest, x => true);
+        }
+
+        /// <summary>
+        /// Clone properties from the source object onto the dest object mapping properties by type and name. Only clone properties 
+        /// with simple types. All values types, primitive types and the string type are considered simple
+        /// </summary>
+        /// <param name="Dest">The object that will be populated</param>
+        /// <param name="Source">The object to read properties from</param>
+        public static void PopulateObjectSimple(object Source, object Dest)
+        {
+            PopulateObject(Source, Dest, x => IsSimpleType(x.Dest.PropertyType));
+        }
+
+        /// <summary>
+        /// Clone properties from the source object onto the dest object mapping properties by type and name. Cloned properties can be further filtered with the
+        /// property mapping predicate
+        /// </summary>
+        /// <param name="Dest">The object that will be populated</param>
+        /// <param name="Source">The object to read properties from</param>
+        /// <param name="PropertyMappingPredicate">After the properties where matched by type and name, a filter with this predicate is applied to the property mappings.</param>
+        public static void PopulateObject(object Source, object Dest, Func<PropertyMapping, bool> PropertyMappingPredicate)
+        {
+            var DestType = Dest.GetType();
+            var Props = MapTypes(Source.GetType(), DestType);
+
+            var Binds = Props
+                .Where(x => PropertyMappingPredicate(x.Value))
+                .Select(x => new { Dest = x.Value.Dest, Value = x.Value.Source.GetValue(Source) }) //Select Dest property and property values from property mappings
+                .ToArray();
+
+            //Execute the bindings:
+            foreach (var b in Binds)
+                b.Dest.SetValue(Dest, b.Value);
+        }
+
+        /// <summary>
         /// Create an expression that initialize an object of type TOut with all properties of type TIn using the member initizer sintax
         /// The user can override or add new member bindings
         /// </summary>
@@ -151,7 +194,11 @@ namespace Tonic
             return query.Select(Clone(otherMembers));
         }
 
-        static bool IsSimpleType(this Type type)
+        /// <summary>
+        /// Returns true if the type is a value type, a primitive, or the type String
+        /// </summary>
+        /// <param name="type">The type to check</param>
+        public static bool IsSimpleType(this Type type)
         {
             return
                 type.IsValueType ||
