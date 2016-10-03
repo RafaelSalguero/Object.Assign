@@ -33,7 +33,10 @@ namespace ObjectAssign.Test
         {
             var Clients = new Client[]
           {
-                new Client { Name = "Rafael", Age = 22, NotSimple = new Client { Name = "Jose", Age = 17 } },
+                new Client {
+                    Name = "Rafael",
+                    Age = 22,
+                    NotSimple = new Client { Name = "Jose", Age = 17 } },
 
           }.AsQueryable();
 

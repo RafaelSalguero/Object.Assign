@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -37,7 +38,7 @@ namespace Tonic
         /// <returns></returns>
         internal static Dictionary<string, PropertyMapping> MapTypesSlow(IEnumerable<PropertyInfo> SourceProperties, IEnumerable<PropertyInfo> DestProperties)
         {
-            var SourceProps = SourceProperties.ToDictionary(x => new { x.Name, x.Type });
+            var SourceProps = SourceProperties.ToDictionary(x => x.Name);
             return
                 DestProperties
                 .Where(x => SourceProps.ContainsKey(x.Name))                        //Filter only properties that are both on source and dest
@@ -98,18 +99,7 @@ namespace Tonic
         }
 
 
-        /// <summary>
-        /// Create an expression that initialize an object of type TOut with all properties of type TIn using the member initizer sintax
-        /// The user can override or add new member bindings
-        /// </summary>
-        /// <typeparam name="TIn">The source type</typeparam>
-        /// <typeparam name="TOut">The object of the type that will be member initialized</typeparam>
-        /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
-        /// <returns></returns>
-        public static Expression<Func<TIn, TOut>> Clone<TIn, TOut>(Expression<Func<TIn, TOut>> otherMembers = null)
-        {
-            return Clone(otherMembers, x => true);
-        }
+
 
         /// <summary>
         /// Clone properties from the source object onto the dest object mapping properties by type and name.
@@ -129,7 +119,7 @@ namespace Tonic
         /// <param name="Source">The object to read properties from</param>
         public static void PopulateObjectSimple(object Source, object Dest)
         {
-            PopulateObject(Source, Dest, x => IsSimpleType(x.Dest.PropertyType));
+            PopulateObject(Source, Dest, x => IsSimpleType(x.Dest.PropertyType), true);
         }
 
         /// <summary>
@@ -139,19 +129,86 @@ namespace Tonic
         /// <param name="Dest">The object that will be populated</param>
         /// <param name="Source">The object to read properties from</param>
         /// <param name="PropertyMappingPredicate">After the properties where matched by type and name, a filter with this predicate is applied to the property mappings.</param>
-        public static void PopulateObject(object Source, object Dest, Func<PropertyMapping, bool> PropertyMappingPredicate)
+        /// <param name="deepClone">True to deep clone the object</param>
+        public static void PopulateObject(object Source,
+            object Dest,
+            Func<PropertyMapping, bool> PropertyMappingPredicate,
+            bool deepClone = false)
         {
             var DestType = Dest.GetType();
             var Props = MapTypes(Source.GetType(), DestType);
 
             var Binds = Props
                 .Where(x => PropertyMappingPredicate(x.Value))
-                .Select(x => new { Dest = x.Value.Dest, Value = x.Value.Source.GetValue(Source) }) //Select Dest property and property values from property mappings
+                .Select(x =>
+                {
+                    //Select Dest property and property values from property mappings
+                    object value;
+                    var sourceValue = x.Value.Source.GetValue(Source);
+                    if (sourceValue != null && !IsSimpleType(sourceValue.GetType()) && deepClone)
+                    {
+                        //deep clone:
+                        value = Activator.CreateInstance(x.Value.Dest.PropertyType);
+                        PopulateObject(sourceValue, value, PropertyMappingPredicate, true);
+                    }
+                    else
+                    {
+                        value = sourceValue;
+                    }
+
+                    return new { Dest = x.Value.Dest, Value = value };
+                })
                 .ToArray();
 
             //Execute the bindings:
             foreach (var b in Binds)
                 b.Dest.SetValue(Dest, b.Value);
+        }
+
+        /// <summary>
+        /// Create the member assignments that initialize an object of type TOut with all properties of type TIn using the member initizer sintax
+        /// The user can override or add new member bindings
+        /// </summary>
+        /// <param name="TIn">The source type</param>
+        /// <param name="TOut">The object of the type that will be member initialized</param>
+        /// <param name="otherBindings">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
+        /// <param name="PropertyMappingPredicate">After the properties where matched by type and name, a filter with this predicate is applied to the property mappings</param>
+        /// <param name="deepClone">True to generate a deep clone expression, false for shallow clone</param>
+        /// <param name="inputParameter">input parameter of type TIn</param>
+        /// <returns></returns>
+        public static MemberAssignment[] CloneExpression(
+            Type TIn,
+            Type TOut,
+            Expression inputParameter,
+            Dictionary<string, MemberAssignment> otherBindings,
+            Func<PropertyMapping, bool> PropertyMappingPredicate,
+            bool deepClone)
+        {
+            var Props = MapTypes(TIn, TOut).Where(x => PropertyMappingPredicate(x.Value));
+
+            var Binds = Props
+                .Where(x => !otherBindings.ContainsKey(x.Key))  //Ignore explicit bindings on other members
+                .Select(P =>
+                {
+                    var sourceProp = Expression.Property(inputParameter, P.Value.Source);
+                    Expression destValue;
+                    //Deep cloning:
+                    if (!IsSimpleType(P.Value.Source.PropertyType) && deepClone)
+                    {
+                        var assignments = CloneExpression(P.Value.Source.PropertyType, P.Value.Source.PropertyType, sourceProp, new Dictionary<string, MemberAssignment>(), PropertyMappingPredicate, true);
+                        destValue = Expression.MemberInit(Expression.New(P.Value.Dest.PropertyType), assignments);
+                    }
+                    else
+                    {
+                        destValue = sourceProp;
+                    }
+
+                    return Expression.Bind(P.Value.Dest, destValue);
+                })
+                .Concat(otherBindings.Values)   //Add member asignments
+                .ToArray();
+
+            return Binds;
         }
 
         /// <summary>
@@ -162,23 +219,50 @@ namespace Tonic
         /// <typeparam name="TOut">The object of the type that will be member initialized</typeparam>
         /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
         /// <param name="PropertyMappingPredicate">After the properties where matched by type and name, a filter with this predicate is applied to the property mappings</param>
+        /// <param name="deepClone">True to generate a deep clone expression, false for shallow clone</param>
         /// <returns></returns>
-        public static Expression<Func<TIn, TOut>> Clone<TIn, TOut>(Expression<Func<TIn, TOut>> otherMembers, Func<PropertyMapping, bool> PropertyMappingPredicate)
+        public static Expression<Func<TIn, TOut>> Clone<TIn, TOut>(
+            Expression<Func<TIn, TOut>> otherMembers,
+            Func<PropertyMapping, bool> PropertyMappingPredicate,
+            bool deepClone = false)
         {
-            var Props = MapTypes(typeof(TIn), typeof(TOut)).Where(x => PropertyMappingPredicate(x.Value));
+            var param = Expression.Parameter(typeof(TIn), "x");
+            var otherBindings = otherMembers == null ? new Dictionary<string, MemberAssignment>() : ExtractBindings(otherMembers, param);
 
-            var Param = Expression.Parameter(typeof(TIn), "cloneInput");
-            var OtherBindings = otherMembers == null ? new Dictionary<string, MemberAssignment>() : ExtractBindings(otherMembers, Param);
+            var binds = CloneExpression(typeof(TIn), typeof(TOut), param, otherBindings, PropertyMappingPredicate, deepClone);
+            var body = Expression.MemberInit(Expression.New(typeof(TOut)), binds);
 
-            var Binds = Props
-                .Where(x => !OtherBindings.ContainsKey(x.Key))  //Ignore explicit bindings on other members
-                .Select(P => Expression.Bind(P.Value.Dest, Expression.Property(Param, P.Value.Source)))
-                .Concat(OtherBindings.Values)   //Add member asignments
-                .ToArray();
+            return Expression.Lambda<Func<TIn, TOut>>(body, param);
+        }
 
-            var Body = Expression.MemberInit(Expression.New(typeof(TOut)), Binds);
+        /// <summary>
+        /// Create an expression that initialize an object of type TOut with all properties of type TIn using the member initizer sintax
+        /// The user can override or add new member bindings.
+        /// This is a shallow clone
+        /// </summary>
+        /// <typeparam name="TIn">The source type</typeparam>
+        /// <typeparam name="TOut">The object of the type that will be member initialized</typeparam>
+        /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
+        /// <returns></returns>
+        public static Expression<Func<TIn, TOut>> Clone<TIn, TOut>(Expression<Func<TIn, TOut>> otherMembers = null)
+        {
+            return Clone(otherMembers, x => true, false);
+        }
 
-            return Expression.Lambda<Func<TIn, TOut>>(Body, Param);
+        /// <summary>
+        /// Returns an expression that clone all simple types properties and
+        /// deep clone properties with types with the ComplexType attribute
+        /// </summary>
+        /// <typeparam name="TIn"></typeparam>
+        /// <typeparam name="TOut"></typeparam>
+        /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
+        /// <returns></returns>
+        public static Expression<Func<TIn, TOut>> CloneSimple<TIn, TOut>(Expression<Func<TIn, TOut>> otherMembers = null)
+        {
+            return Clone(otherMembers,
+                x =>
+            x.Source.PropertyType.GetCustomAttribute<ComplexTypeAttribute>() != null ||
+            IsSimpleType(x.Dest.PropertyType), true);
         }
 
         /// <summary>
@@ -195,6 +279,45 @@ namespace Tonic
         }
 
         /// <summary>
+        /// Clones all properties that have the same name and type from input type to a new instance of output type
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="TOut"></typeparam>
+        /// <param name="query">The query to proyect</param>
+        /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
+        /// <returns></returns>
+        public static IEnumerable<TOut> SelectClone<T, TOut>(this IEnumerable<T> query, Expression<Func<T, TOut>> otherMembers = null)
+            where TOut : new()
+        {
+            return query.Select(x =>
+            {
+                var ret = new TOut();
+                PopulateObject(x, ret);
+                return ret;
+            });
+        }
+
+        /// <summary>
+        /// Clones all properties that have the same name and type from input type to a new instance of output type.
+        /// Only properties that have 'simple' types are copied by default. All value-types, primitive types, and the string type are considered simple
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="TOut"></typeparam>
+        /// <param name="query">The query to proyect</param>
+        /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
+        /// <returns></returns>
+        public static IEnumerable<TOut> SelectCloneSimple<T, TOut>(this IEnumerable<T> query, Expression<Func<T, TOut>> otherMembers = null)
+            where TOut : new()
+        {
+            return query.Select(x =>
+            {
+                var ret = new TOut();
+                PopulateObjectSimple(x, ret);
+                return ret;
+            });
+        }
+
+        /// <summary>
         /// Returns true if the type is a value type, a primitive, or the type String
         /// </summary>
         /// <param name="type">The type to check</param>
@@ -207,7 +330,10 @@ namespace Tonic
         }
 
         /// <summary>
-        /// Call the Select method from the given queryable with the clone expression. Only properties that have 'simple' types are copied by default. All value-types, primitive types, and the string type are considered simple
+        /// Clones all properties that have the same name and type. 
+        /// Only properties that have 'simple' types or types with the ComplexType attribute are copied by default. 
+        /// All value-types, primitive types, and the string type are considered simple.
+        /// Complex properties marked with the ComplexType attribute are deep cloned
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <typeparam name="TOut"></typeparam>
@@ -215,12 +341,14 @@ namespace Tonic
         /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
         /// <returns></returns>
         public static IQueryable<TOut> SelectCloneSimple<T, TOut>(this IQueryable<T> query, Expression<Func<T, TOut>> otherMembers = null)
+            where TOut : new()
         {
-            return query.Select(Clone(otherMembers, x => IsSimpleType(x.Dest.PropertyType)));
+            return query.Select(CloneSimple(otherMembers));
         }
 
         /// <summary>
-        /// Call the Select method from the given queryable with the clone expression
+        /// Clones all properties that have the same name and type from input type to a new instance of output type.
+        /// This results in a shallow clone
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <typeparam name="TOut"></typeparam>
@@ -229,9 +357,12 @@ namespace Tonic
         /// <param name="PropertyMappingPredicate">After the properties where matched by type and name, a filter with this predicate is applied to the property mappings</param>
         /// <returns></returns>
         public static IQueryable<TOut> SelectClone<T, TOut>(this IQueryable<T> query, Expression<Func<T, TOut>> otherMembers, Func<PropertyMapping, bool> PropertyMappingPredicate)
+            where TOut : new()
         {
-            return query.Select(Clone(otherMembers, PropertyMappingPredicate));
+            return query.Select(Clone(otherMembers, PropertyMappingPredicate, false));
         }
+
+
     }
 
 }

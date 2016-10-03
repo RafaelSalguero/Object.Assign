@@ -57,16 +57,9 @@ namespace ObjectAssign.Test
             var Source = new Client { Name = "Rafael", Age = 22 };
             var Dest = new ClientDTO();
 
-            LinqEx.PopulateObject(Source, Dest, 
-                new Dictionary<string, object> {
-                    { "Age", 20 },
-                    {"LegalDrinking", true }
-                }, 
-                x => true);
+            LinqEx.PopulateObject(Source, Dest, x => true);
 
-            Assert.AreEqual("Rafael", Dest.Name);
-            Assert.AreEqual(20, Dest.Age);
-            Assert.AreEqual(true, Dest.LegalDrinking);
+            Assert.AreEqual(false, Dest.LegalDrinking);
         }
 
         [TestMethod]
