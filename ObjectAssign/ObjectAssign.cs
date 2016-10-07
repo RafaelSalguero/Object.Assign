@@ -125,7 +125,8 @@ namespace Tonic
 
         /// <summary>
         /// Clone properties from the source object onto the dest object mapping properties by type and name. Only clone properties 
-        /// with simple types. All values types, primitive types and the string type are considered simple
+        /// with simple types. All values types, primitive types and the string type are considered simple.
+        /// Types marked with the ComplexType attribute are also populated or created if null is found on dest properties
         /// </summary>
         /// <param name="Dest">The object that will be populated</param>
         /// <param name="Source">The object to read properties from</param>
@@ -160,7 +161,11 @@ namespace Tonic
                     if (sourceValue != null && !IsSimpleType(sourceValue.GetType()) && deepClone)
                     {
                         //deep clone:
-                        value = Activator.CreateInstance(x.Value.Dest.PropertyType);
+                        value = x.Value.Dest.CanRead ? x.Value.Dest.GetValue(Dest) : null;
+
+                        //Create an instance if dest is null:
+                        if (value == null)
+                            value = Activator.CreateInstance(x.Value.Dest.PropertyType);
                         PopulateObject(sourceValue, value, PropertyMappingPredicate, true);
                     }
                     else
@@ -168,7 +173,11 @@ namespace Tonic
                         value = sourceValue;
                     }
 
-                    return new { Dest = x.Value.Dest, Value = value };
+                    return new
+                    {
+                        Dest = x.Value.Dest,
+                        Value = value
+                    };
                 })
                 .ToArray();
 

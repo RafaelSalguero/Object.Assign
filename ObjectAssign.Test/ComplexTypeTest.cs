@@ -38,6 +38,42 @@ namespace ObjectAssign.Test
         }
 
         [TestMethod]
+        public void ComplexTypePopulateSimpleTestPopulateDeep()
+        {
+
+            var Source = new Client
+            {
+                Name = "Rafael",
+                Age = 22,
+                NotSimple = new Client { Name = "Jose", Age = 17 },
+                Address = new Address
+                {
+                    City = "Obregon",
+                    Street = "E Baca Calderon"
+                }
+            };
+
+            var Dest = new ClientDTO { Address = new Address() } ;
+
+            var lastDestAddress = Dest.Address;
+            LinqEx.PopulateObjectSimple(Source, Dest);
+
+            Assert.AreEqual(Dest.Name, Source.Name);
+            Assert.AreEqual(Dest.Age, Source.Age);
+            Assert.IsNull(Dest.NotSimple);
+
+            Assert.IsNotNull(Dest.Address);
+
+            //Deep cloning should result in different instances
+            Assert.AreNotEqual(Source.Address, Dest.Address);
+            //Deep cloning should populate (not instantiate) Dest.Address
+            Assert.AreEqual(lastDestAddress, Dest.Address);
+
+            Assert.AreEqual(Source.Address.City, Dest.Address.City);
+            Assert.AreEqual(Source.Address.Street, Dest.Address.Street);
+        }
+
+        [TestMethod]
         public void ComplexTypePopulateSimpleTest()
         {
 
@@ -55,6 +91,7 @@ namespace ObjectAssign.Test
 
             var Dest = new ClientDTO();
 
+            Assert.IsNull(Dest.Address);
             LinqEx.PopulateObjectSimple(Source, Dest);
 
             Assert.AreEqual(Dest.Name, Source.Name);
@@ -62,7 +99,7 @@ namespace ObjectAssign.Test
             Assert.IsNull(Dest.NotSimple);
 
             Assert.IsNotNull(Dest.Address);
-        
+
             //Deep cloning should result in different instances
             Assert.AreNotEqual(Source.Address, Dest.Address);
             Assert.AreEqual(Source.Address.City, Dest.Address.City);
