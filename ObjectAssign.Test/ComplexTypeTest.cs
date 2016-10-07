@@ -72,7 +72,6 @@ namespace ObjectAssign.Test
 
             var ret = Clients.SelectCloneSimple(x => new ClientDTO { });
 
-
             var Original = Clients.First();
             var Result = ret.First();
 

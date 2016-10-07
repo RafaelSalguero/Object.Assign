@@ -34,22 +34,28 @@ namespace Tonic
 
         /// <summary>
         /// Map without using the cache
+        /// Only map a pair of properties if the source property can be readed and if the dest property can be written
         /// </summary>
         /// <returns></returns>
         internal static Dictionary<string, PropertyMapping> MapTypesSlow(IEnumerable<PropertyInfo> SourceProperties, IEnumerable<PropertyInfo> DestProperties)
         {
+
             var SourceProps = SourceProperties.ToDictionary(x => x.Name);
             return
                 DestProperties
                 .Where(x => SourceProps.ContainsKey(x.Name))                        //Filter only properties that are both on source and dest
                 .Select(x => new { DestProp = x, SourceProp = SourceProps[x.Name] })//Map by name between
-                .Where(x => x.SourceProp.PropertyType == x.DestProp.PropertyType)   //Filter out properties with the same name but different type
+                .Where(x => x.DestProp.PropertyType.IsAssignableFrom(x.SourceProp.PropertyType))   //Filter out properties with the same name but different type or types that are not assignable
+                .Where(x => x.SourceProp.CanRead && x.DestProp.CanWrite) //Only pass when the source can be readed and when DestProp can be written
                 .Select(x => new PropertyMapping { Dest = x.DestProp, Source = x.SourceProp })
                 .ToDictionary(x => x.Dest.Name);
         }
 
         /// <summary>
-        /// Map all properties that are both in source and dest. The property comparission takes the property name and property type. This method is used internally by the Assign method
+        /// Map all properties that are both in source and dest.
+        /// The property comparission takes the property name and property type.
+        /// This method is used internally by the Assign method.
+        /// Only map a pair of properties if the source property can be readed and if the dest property can be written
         /// </summary>
         /// <param name="Source">Source type</param>
         /// <param name="Dest">Dest type</param>

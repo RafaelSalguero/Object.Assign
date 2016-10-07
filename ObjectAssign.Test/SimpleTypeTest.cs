@@ -16,7 +16,14 @@ namespace ObjectAssign.Test
             public string Name { get; set; }
             public int Age { get; set; }
             public string InternalData { get; set; }
-            public Client NotSimple { get; set; }
+            public Subclient NotSimple { get; set; }
+            public Client NotSimple2 { get; set; }
+            public int AgePlusOne => Age + 1;
+        }
+
+        class Subclient : Client
+        {
+            public string Phone { get; set; }
         }
 
         class ClientDTO
@@ -25,6 +32,18 @@ namespace ObjectAssign.Test
             public int Age { get; set; }
             public bool LegalDrinking { get; set; }
             public Client NotSimple { get; set; }
+            public Client NotSimple2 { get; set; }
+
+            public int AgePlusOne => Age + 1;
+        }
+
+        [TestMethod]
+        public void PopulateObject()
+        {
+            var A = new Client { Age = 21, Name = "Rafael", InternalData = "Hello", NotSimple = null };
+            var B = new ClientDTO();
+
+            LinqEx.PopulateObject(A, B);
 
         }
 
@@ -36,17 +55,19 @@ namespace ObjectAssign.Test
                 new Client {
                     Name = "Rafael",
                     Age = 22,
-                    NotSimple = new Client { Name = "Jose", Age = 17 } },
+                    NotSimple = new Subclient { Name = "Jose", Age = 17 } },
 
           }.AsQueryable();
 
 
             var Ret1 = Clients.SelectClone(x => new ClientDTO { Age = 20 }).First();
-            Assert.AreEqual( Clients.First().NotSimple, Ret1.NotSimple);
+            Assert.AreEqual(Clients.First().NotSimple, Ret1.NotSimple);
+            Assert.AreEqual(Clients.First().NotSimple2, Ret1.NotSimple2);
 
 
             var Ret2 = Clients.SelectCloneSimple(x => new ClientDTO { Age = 20 }).First();
             Assert.IsNull(Ret2.NotSimple);
+            Assert.IsNull(Ret2.NotSimple2);
         }
     }
 }
