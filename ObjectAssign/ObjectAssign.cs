@@ -117,6 +117,12 @@ namespace Tonic
             PopulateObject(Source, Dest, x => true);
         }
 
+        private static bool SimplePropertyMappingPredicate(PropertyMapping x)
+        {
+            return x.Source.PropertyType.GetCustomAttribute<ComplexTypeAttribute>() != null ||
+            IsSimpleType(x.Dest.PropertyType);
+        }
+
         /// <summary>
         /// Clone properties from the source object onto the dest object mapping properties by type and name. Only clone properties 
         /// with simple types. All values types, primitive types and the string type are considered simple
@@ -125,7 +131,7 @@ namespace Tonic
         /// <param name="Source">The object to read properties from</param>
         public static void PopulateObjectSimple(object Source, object Dest)
         {
-            PopulateObject(Source, Dest, x => IsSimpleType(x.Dest.PropertyType), true);
+            PopulateObject(Source, Dest, SimplePropertyMappingPredicate, true);
         }
 
         /// <summary>
@@ -265,10 +271,7 @@ namespace Tonic
         /// <returns></returns>
         public static Expression<Func<TIn, TOut>> CloneSimple<TIn, TOut>(Expression<Func<TIn, TOut>> otherMembers = null)
         {
-            return Clone(otherMembers,
-                x =>
-            x.Source.PropertyType.GetCustomAttribute<ComplexTypeAttribute>() != null ||
-            IsSimpleType(x.Dest.PropertyType), true);
+            return Clone(otherMembers, SimplePropertyMappingPredicate, true);
         }
 
         /// <summary>

@@ -38,6 +38,38 @@ namespace ObjectAssign.Test
         }
 
         [TestMethod]
+        public void ComplexTypePopulateSimpleTest()
+        {
+
+            var Source = new Client
+            {
+                Name = "Rafael",
+                Age = 22,
+                NotSimple = new Client { Name = "Jose", Age = 17 },
+                Address = new Address
+                {
+                    City = "Obregon",
+                    Street = "E Baca Calderon"
+                }
+            };
+
+            var Dest = new ClientDTO();
+
+            LinqEx.PopulateObjectSimple(Source, Dest);
+
+            Assert.AreEqual(Dest.Name, Source.Name);
+            Assert.AreEqual(Dest.Age, Source.Age);
+            Assert.IsNull(Dest.NotSimple);
+
+            Assert.IsNotNull(Dest.Address);
+        
+            //Deep cloning should result in different instances
+            Assert.AreNotEqual(Source.Address, Dest.Address);
+            Assert.AreEqual(Source.Address.City, Dest.Address.City);
+            Assert.AreEqual(Source.Address.Street, Dest.Address.Street);
+        }
+
+        [TestMethod]
         public void ComplexTypeExpressionTest()
         {
             var ex = Tonic.LinqEx.CloneSimple<Client, ClientDTO>();
