@@ -30,7 +30,12 @@ namespace Tonic
             /// </summary>
             public PropertyInfo Source { get; set; }
         }
-        static Dictionary<Tuple<Type, Type>, Dictionary<string, PropertyMapping>> Mappings = new Dictionary<Tuple<Type, Type>, Dictionary<string, PropertyMapping>>();
+
+        /// <summary>
+        /// MapTypesSlow result cache
+        /// </summary>
+        [ThreadStatic]
+        static Dictionary<Tuple<Type, Type>, Dictionary<string, PropertyMapping>> mappingsCache;
 
         /// <summary>
         /// Map without using the cache
@@ -64,10 +69,13 @@ namespace Tonic
         {
             var Key = Tuple.Create(Source, Dest);
             Dictionary<string, PropertyMapping> Result;
-            if (!Mappings.TryGetValue(Key, out Result))
+            if(mappingsCache == null)
+                mappingsCache = new Dictionary<Tuple<Type, Type>, Dictionary<string, Tonic.LinqEx.PropertyMapping>>();
+
+            if (!mappingsCache.TryGetValue(Key, out Result))
             {
                 Result = MapTypesSlow(Source.GetProperties(), Dest.GetProperties());
-                Mappings.Add(Key, Result);
+                mappingsCache.Add(Key, Result);
             }
             return Result;
         }

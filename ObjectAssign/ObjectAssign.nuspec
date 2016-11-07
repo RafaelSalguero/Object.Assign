@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>$id$</id>
+    <version>$version$</version>
+    <title>$title$</title>
+    <authors>Rafael Salguero Iturrios</authors>
+    <owners>Rafael Salguero Iturrios</owners>
+    <licenseUrl>https://github.com/RafaelSalguero/Object.Assign/blob/master/LICENSE.txt</licenseUrl>
+    <projectUrl>http://github.com/RafaelSalguero/Object.Assign</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>$description$</description>
+    <copyright>Copyright 2016</copyright>
+    <tags>LINQ EntityFramework ObjectAssign</tags>
+  </metadata>
+</package>
