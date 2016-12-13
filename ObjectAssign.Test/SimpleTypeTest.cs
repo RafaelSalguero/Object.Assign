@@ -69,5 +69,84 @@ namespace ObjectAssign.Test
             Assert.IsNull(Ret2.NotSimple);
             Assert.IsNull(Ret2.NotSimple2);
         }
+
+        [TestMethod]
+        public void InMemorySelectClone()
+        {
+            var Clients = new Client[]
+        {
+                new Client {
+                    Name = "Rafael",
+                    Age = 22,
+                    NotSimple = new Subclient { Name = "Jose", Age = 17 } },
+
+                };
+
+            var Ret1 = Clients.SelectClone(x => new ClientDTO {  }).First();
+            Assert.AreEqual(Clients.First().Name, Ret1.Name);
+            Assert.AreEqual(Clients.First().Age, Ret1.Age);
+            Assert.AreEqual(Clients.First().NotSimple, Ret1.NotSimple);
+
+        }
+
+
+        [TestMethod]
+        public void InMemorySelectCloneSimple()
+        {
+            var Clients = new Client[]
+        {
+                new Client {
+                    Name = "Rafael",
+                    Age = 22,
+                    NotSimple = new Subclient { Name = "Jose", Age = 17 } },
+
+                };
+
+            var Ret1 = Clients.SelectCloneSimple(x => new ClientDTO {  }).First();
+            Assert.AreEqual(Clients.First().Name, Ret1.Name);
+            Assert.AreEqual(Clients.First().Age, Ret1.Age);
+            Assert.AreEqual(null, Ret1.NotSimple);
+
+        }
+
+        [TestMethod]
+        public void InMemorySelectCloneMemberInit()
+        {
+            var Clients = new Client[]
+        {
+                new Client {
+                    Name = "Rafael",
+                    Age = 22,
+                    NotSimple = new Subclient { Name = "Jose", Age = 17 } },
+
+                };
+
+            var Ret1 = Clients.SelectClone(x => new ClientDTO { Age = x.Age + 2 }).First();
+            Assert.AreEqual(Clients.First().Name, Ret1.Name);
+            Assert.AreEqual(24, Ret1.Age);
+            Assert.AreEqual(Clients.First().NotSimple, Ret1.NotSimple);
+        }
+
+        [TestMethod]
+        public void InMemorySelectCloneSimpleMemberInit()
+        {
+            var Clients = new Client[]
+        {
+                new Client {
+                    Name = "Rafael",
+                    Age = 22,
+                    NotSimple = new Subclient { Name = "Jose", Age = 17 } },
+
+                };
+
+            var Ret1 = Clients.SelectCloneSimple(x => new ClientDTO { Age = 20 }).First();
+
+            Ret1 = Clients.SelectCloneSimple(x => new ClientDTO { Age = 20 }).First();
+            Assert.AreEqual(Clients.First().Name, Ret1.Name);
+            Assert.AreEqual(20, Ret1.Age);
+            Assert.AreEqual(null, Ret1.NotSimple);
+
+        }
+
     }
 }

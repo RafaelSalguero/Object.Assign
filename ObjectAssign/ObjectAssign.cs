@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
@@ -69,7 +70,7 @@ namespace Tonic
         {
             var Key = Tuple.Create(Source, Dest);
             Dictionary<string, PropertyMapping> Result;
-            if(mappingsCache == null)
+            if (mappingsCache == null)
                 mappingsCache = new Dictionary<Tuple<Type, Type>, Dictionary<string, Tonic.LinqEx.PropertyMapping>>();
 
             if (!mappingsCache.TryGetValue(Key, out Result))
@@ -86,10 +87,15 @@ namespace Tonic
         /// <typeparam name="TIn">Source type</typeparam>
         /// <typeparam name="TOut">Dest type</typeparam>
         /// <param name="expression">Member initialization expression</param>
-        /// <param name="inputParameter">Expression that will replace the input parameter of the given expression</param>
+        /// <param name="inputParameter">Expression that will replace the input parameter of the given expression or null to not replace the input parameter</param>
         /// <returns></returns>
-        internal static Dictionary<string, MemberAssignment> ExtractBindings<TIn, TOut>(Expression<Func<TIn, TOut>> expression, Expression inputParameter)
+        internal static Dictionary<string, MemberAssignment> ExtractBindings<TIn, TOut>(Expression<Func<TIn, TOut>> expression, Expression inputParameter = null)
         {
+            if (inputParameter == null)
+            {
+                inputParameter = expression.Parameters[0];
+            }
+
             if (!(expression.Body is MemberInitExpression))
                 throw new ArgumentException("The body of the expression isn't a member initialization expression");
 
@@ -144,6 +150,41 @@ namespace Tonic
         }
 
         /// <summary>
+        /// Set the properties of an object that are present on the given memeber initialization expression
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <typeparam name="TOut"></typeparam>
+        /// <param name="instance"></param>
+        /// <param name="memberInitialization"></param>
+        public static void PopulateObject<T, TOut>(T source, TOut dest, Expression<Func<T, TOut>> memberInitialization)
+        {
+            ParameterExpression param = Expression.Parameter(typeof(T));
+            ParameterExpression destParam = Expression.Parameter(typeof(TOut));
+            var initExpressions = ExtractBindings(memberInitialization, param);
+            Action<T, TOut> result;
+
+            if (initExpressions.Count == 0)
+            {
+                result = (T a, TOut b) => { };
+            }
+            else
+            {
+                var block = new List<Expression>();
+                foreach (var m in initExpressions.Values)
+                {
+                    var member = m.Member;
+                    var expr = Expression.Assign(Expression.PropertyOrField(destParam, member.Name), m.Expression);
+                    block.Add(expr);
+                }
+
+                var lambda = Expression.Lambda<Action<T, TOut>>(Expression.Block(block), param, destParam);
+                result = lambda.Compile();
+            }
+
+            result(source, dest);
+        }
+
+        /// <summary>
         /// Clone properties from the source object onto the dest object mapping properties by type and name. Cloned properties can be further filtered with the
         /// property mapping predicate
         /// </summary>
@@ -163,16 +204,16 @@ namespace Tonic
                 .Where(x => PropertyMappingPredicate(x.Value))
                 .Select(x =>
                 {
-                    //Select Dest property and property values from property mappings
-                    object value;
+                //Select Dest property and property values from property mappings
+                object value;
                     var sourceValue = x.Value.Source.GetValue(Source);
                     if (sourceValue != null && !IsSimpleType(sourceValue.GetType()) && deepClone)
                     {
-                        //deep clone:
-                        value = x.Value.Dest.CanRead ? x.Value.Dest.GetValue(Dest) : null;
+                    //deep clone:
+                    value = x.Value.Dest.CanRead ? x.Value.Dest.GetValue(Dest) : null;
 
-                        //Create an instance if dest is null:
-                        if (value == null)
+                    //Create an instance if dest is null:
+                    if (value == null)
                             value = Activator.CreateInstance(x.Value.Dest.PropertyType);
                         PopulateObject(sourceValue, value, PropertyMappingPredicate, true);
                     }
@@ -221,8 +262,8 @@ namespace Tonic
                 {
                     var sourceProp = Expression.Property(inputParameter, P.Value.Source);
                     Expression destValue;
-                    //Deep cloning:
-                    if (!IsSimpleType(P.Value.Source.PropertyType) && deepClone)
+                //Deep cloning:
+                if (!IsSimpleType(P.Value.Source.PropertyType) && deepClone)
                     {
                         var assignments = CloneExpression(P.Value.Source.PropertyType, P.Value.Source.PropertyType, sourceProp, new Dictionary<string, MemberAssignment>(), PropertyMappingPredicate, true);
                         destValue = Expression.MemberInit(Expression.New(P.Value.Dest.PropertyType), assignments);
@@ -319,6 +360,8 @@ namespace Tonic
             {
                 var ret = new TOut();
                 PopulateObject(x, ret);
+                if (otherMembers != null)
+                    PopulateObject(x, ret, otherMembers);
                 return ret;
             });
         }
@@ -339,6 +382,8 @@ namespace Tonic
             {
                 var ret = new TOut();
                 PopulateObjectSimple(x, ret);
+                if (otherMembers != null)
+                    PopulateObject(x, ret, otherMembers);
                 return ret;
             });
         }
