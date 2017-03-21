@@ -114,11 +114,7 @@ namespace ObjectAssign.Test
             {
                 Name = x.Name,
                 Age = x.Age,
-                Address = new Address
-                {
-                    Street = x.Address.Street,
-                    City = x.Address.City,
-                }
+                Address = x.Address
             };
             Assert.AreEqual(ex.ToString(), desiredExpression.ToString());
         }
@@ -147,8 +143,8 @@ namespace ObjectAssign.Test
             Assert.AreEqual(Original.Name, Result.Name);
             Assert.AreEqual(Original.Age, Result.Age);
 
-            //Result.Address is not the same instance as Original.Address since deep clone was used
-            Assert.AreNotEqual(Original.Address, Result.Address);
+            //Result.Address is the same instance as Original.Address since deep clone was used
+            Assert.AreEqual(Original.Address, Result.Address);
 
             Assert.AreEqual(Original.Address.City, Result.Address.City);
             Assert.AreEqual(Original.Address.Street, Result.Address.Street);

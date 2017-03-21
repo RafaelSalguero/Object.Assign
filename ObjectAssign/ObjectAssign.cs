@@ -329,7 +329,7 @@ namespace Tonic
         /// <returns></returns>
         public static Expression<Func<TIn, TOut>> CloneSimple<TIn, TOut>(Expression<Func<TIn, TOut>> otherMembers = null)
         {
-            return Clone(otherMembers, SimplePropertyMappingPredicate, true);
+            return Clone(otherMembers, SimplePropertyMappingPredicate, false);
         }
 
         /// <summary>
@@ -389,7 +389,7 @@ namespace Tonic
         }
 
         /// <summary>
-        /// Returns true if the type is a value type, a primitive, or the type String
+        /// Returns true if the type is a value type, a primitive, the type String or a byte array
         /// </summary>
         /// <param name="type">The type to check</param>
         public static bool IsSimpleType(this Type type)
@@ -397,7 +397,8 @@ namespace Tonic
             return
                 type.IsValueType ||
                 type.IsPrimitive ||
-                type == typeof(string);
+                type == typeof(string) ||
+                type == typeof(byte[]);
         }
 
         /// <summary>
