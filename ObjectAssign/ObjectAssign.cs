@@ -118,7 +118,35 @@ namespace Tonic
             return result;
         }
 
+        /// <summary>
+        /// Combine two dictionaries, b dictionary elements takes precedence over a elements, if the key is present on both dictionaries
+        /// </summary>
+        /// <param name="a">First dictionary</param>
+        /// <param name="b">Second dictionary. This dictionary takes precedence over the second</param>
+        /// <returns></returns>
+        internal static Dictionary<TKey, TValue> CombineDictionary<TKey, TValue>(Dictionary<TKey, TValue> a, Dictionary<TKey, TValue> b)
+        {
+            var ret = new Dictionary<TKey, TValue>(a);
+            foreach (var k in b)
+                ret[k.Key] = k.Value;
 
+            return ret;
+        }
+
+        /// <summary>
+        /// Combie two member initialization expressions. The second expression takes precedence over the first one if the same property initializer is present on both expressions
+        /// </summary>
+        /// <returns></returns>
+        public static Expression<Func<TIn, TOut>> CombineMemberInitExpression<TIn, TOut>(Expression<Func<TIn, TOut>> a, Expression<Func<TIn, TOut>> b)
+        {
+            var param = Expression.Parameter(typeof(TIn), "x");
+            var aBindings = ExtractBindings(a, param);
+            var bBindings = ExtractBindings(b, param);
+
+            var combine = CombineDictionary(aBindings, bBindings);
+
+            return Expression.Lambda<Func<TIn, TOut>>(Expression.MemberInit((b.Body as MemberInitExpression).NewExpression, combine.Values), param);
+        }
 
 
         /// <summary>
@@ -204,16 +232,16 @@ namespace Tonic
                 .Where(x => PropertyMappingPredicate(x.Value))
                 .Select(x =>
                 {
-                //Select Dest property and property values from property mappings
-                object value;
+                    //Select Dest property and property values from property mappings
+                    object value;
                     var sourceValue = x.Value.Source.GetValue(Source);
                     if (sourceValue != null && !IsSimpleType(sourceValue.GetType()) && deepClone)
                     {
-                    //deep clone:
-                    value = x.Value.Dest.CanRead ? x.Value.Dest.GetValue(Dest) : null;
+                        //deep clone:
+                        value = x.Value.Dest.CanRead ? x.Value.Dest.GetValue(Dest) : null;
 
-                    //Create an instance if dest is null:
-                    if (value == null)
+                        //Create an instance if dest is null:
+                        if (value == null)
                             value = Activator.CreateInstance(x.Value.Dest.PropertyType);
                         PopulateObject(sourceValue, value, PropertyMappingPredicate, true);
                     }
@@ -262,8 +290,8 @@ namespace Tonic
                 {
                     var sourceProp = Expression.Property(inputParameter, P.Value.Source);
                     Expression destValue;
-                //Deep cloning:
-                if (!IsSimpleType(P.Value.Source.PropertyType) && deepClone)
+                    //Deep cloning:
+                    if (!IsSimpleType(P.Value.Source.PropertyType) && deepClone)
                     {
                         var assignments = CloneExpression(P.Value.Source.PropertyType, P.Value.Source.PropertyType, sourceProp, new Dictionary<string, MemberAssignment>(), PropertyMappingPredicate, true);
                         destValue = Expression.MemberInit(Expression.New(P.Value.Dest.PropertyType), assignments);
@@ -321,7 +349,9 @@ namespace Tonic
 
         /// <summary>
         /// Returns an expression that clone all simple types properties and
-        /// deep clone properties with types with the ComplexType attribute
+        /// deep clone properties with types with the ComplexType attribute.
+        /// 
+        /// Use this expression inside a Select to perform a SelectCloneSimple
         /// </summary>
         /// <typeparam name="TIn"></typeparam>
         /// <typeparam name="TOut"></typeparam>

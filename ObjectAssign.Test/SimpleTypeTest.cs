@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -35,6 +36,33 @@ namespace ObjectAssign.Test
             public Client NotSimple2 { get; set; }
 
             public int AgePlusOne => Age + 1;
+        }
+
+        [TestMethod]
+        public void CombineMemberInitTest()
+        {
+            Expression<Func<Client, ClientDTO>> a = x => new ClientDTO
+            {
+                 Name = "Hello " + x.Name,
+                 Age = x.Age
+            };
+
+            Expression<Func<Client, ClientDTO>> b = x => new ClientDTO
+            {
+                 LegalDrinking = true,
+                 Age = x.Age + 1
+            };
+
+            var comb = LinqEx.CombineMemberInitExpression(a, b);
+            var res = comb.Compile()(new Client
+            {
+                Name = "Rafael",
+                Age = 20,
+            });
+
+            Assert.AreEqual("Hello Rafael", res.Name);
+            Assert.AreEqual(21, res.Age);
+            Assert.AreEqual(true, res.LegalDrinking);
         }
 
         [TestMethod]
