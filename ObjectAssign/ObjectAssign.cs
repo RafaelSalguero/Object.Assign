@@ -27,7 +27,7 @@ namespace Tonic
             /// </summary>
             public PropertyInfo Dest { get; set; }
             /// <summary>
-            /// Source property
+            /// Available source properties
             /// </summary>
             public PropertyInfo Source { get; set; }
         }
@@ -36,25 +36,33 @@ namespace Tonic
         /// MapTypesSlow result cache
         /// </summary>
         [ThreadStatic]
-        static Dictionary<Tuple<Type, Type>, Dictionary<string, PropertyMapping>> mappingsCache;
+        static Dictionary<Tuple<Type, Type>, IEnumerable<PropertyMapping>> mappingsCache;
 
         /// <summary>
         /// Map without using the cache
         /// Only map a pair of properties if the source property can be readed and if the dest property can be written
         /// </summary>
         /// <returns></returns>
-        internal static Dictionary<string, PropertyMapping> MapTypesSlow(IEnumerable<PropertyInfo> SourceProperties, IEnumerable<PropertyInfo> DestProperties)
+        internal static IEnumerable<PropertyMapping> MapTypesSlow(IEnumerable<PropertyInfo> SourceProperties, IEnumerable<PropertyInfo> DestProperties)
         {
+            var SourceProps = SourceProperties
+                .Where(x => x.CanRead)
+                .GroupBy(x => x.Name).ToDictionary(x => x.Key, x => x.ToList());
 
-            var SourceProps = SourceProperties.ToDictionary(x => x.Name);
             return
                 DestProperties
+                .Where(x => x.CanWrite) //Only writable dest properties
                 .Where(x => SourceProps.ContainsKey(x.Name))                        //Filter only properties that are both on source and dest
-                .Select(x => new { DestProp = x, SourceProp = SourceProps[x.Name] })//Map by name between
-                .Where(x => x.DestProp.PropertyType.IsAssignableFrom(x.SourceProp.PropertyType))   //Filter out properties with the same name but different type or types that are not assignable
-                .Where(x => x.SourceProp.CanRead && x.DestProp.CanWrite) //Only pass when the source can be readed and when DestProp can be written
-                .Select(x => new PropertyMapping { Dest = x.DestProp, Source = x.SourceProp })
-                .ToDictionary(x => x.Dest.Name);
+                .Select(x => new {
+                    DestProp = x,
+                    SourceProps = SourceProps[x.Name].Where(src => x.PropertyType.IsAssignableFrom(src.PropertyType))// filter type-compatible properties
+                })
+                .Where(x=> x.SourceProps.Any()) //Filter out any pair without any compatible properties
+                .Select(x => 
+                new PropertyMapping {
+                    Dest = x.DestProp,
+                    Source = x.SourceProps.First()
+                });
         }
 
         /// <summary>
@@ -66,12 +74,12 @@ namespace Tonic
         /// <param name="Source">Source type</param>
         /// <param name="Dest">Dest type</param>
         /// <returns></returns>
-        internal static Dictionary<string, PropertyMapping> MapTypes(Type Source, Type Dest)
+        internal static IEnumerable<PropertyMapping> MapTypes(Type Source, Type Dest)
         {
             var Key = Tuple.Create(Source, Dest);
-            Dictionary<string, PropertyMapping> Result;
+            IEnumerable<PropertyMapping> Result;
             if (mappingsCache == null)
-                mappingsCache = new Dictionary<Tuple<Type, Type>, Dictionary<string, Tonic.LinqEx.PropertyMapping>>();
+                mappingsCache = new Dictionary<Tuple<Type, Type>, IEnumerable<PropertyMapping>>();
 
             if (!mappingsCache.TryGetValue(Key, out Result))
             {
@@ -229,20 +237,20 @@ namespace Tonic
             var Props = MapTypes(Source.GetType(), DestType);
 
             var Binds = Props
-                .Where(x => PropertyMappingPredicate(x.Value))
+                .Where(x => PropertyMappingPredicate(x))
                 .Select(x =>
                 {
                     //Select Dest property and property values from property mappings
                     object value;
-                    var sourceValue = x.Value.Source.GetValue(Source);
+                    var sourceValue = x.Source.GetValue(Source);
                     if (sourceValue != null && !IsSimpleType(sourceValue.GetType()) && deepClone)
                     {
                         //deep clone:
-                        value = x.Value.Dest.CanRead ? x.Value.Dest.GetValue(Dest) : null;
+                        value = x.Dest.CanRead ? x.Dest.GetValue(Dest) : null;
 
                         //Create an instance if dest is null:
                         if (value == null)
-                            value = Activator.CreateInstance(x.Value.Dest.PropertyType);
+                            value = Activator.CreateInstance(x.Dest.PropertyType);
                         PopulateObject(sourceValue, value, PropertyMappingPredicate, true);
                     }
                     else
@@ -252,7 +260,7 @@ namespace Tonic
 
                     return new
                     {
-                        Dest = x.Value.Dest,
+                        Dest = x.Dest,
                         Value = value
                     };
                 })
@@ -282,26 +290,26 @@ namespace Tonic
             Func<PropertyMapping, bool> PropertyMappingPredicate,
             bool deepClone)
         {
-            var Props = MapTypes(TIn, TOut).Where(x => PropertyMappingPredicate(x.Value));
+            var Props = MapTypes(TIn, TOut).Where(x => PropertyMappingPredicate(x));
 
             var Binds = Props
-                .Where(x => !otherBindings.ContainsKey(x.Key))  //Ignore explicit bindings on other members
+                .Where(x => !otherBindings.ContainsKey(x.Dest.Name))  //Ignore explicit bindings on other members
                 .Select(P =>
                 {
-                    var sourceProp = Expression.Property(inputParameter, P.Value.Source);
+                    var sourceProp = Expression.Property(inputParameter, P.Source);
                     Expression destValue;
                     //Deep cloning:
-                    if (!IsSimpleType(P.Value.Source.PropertyType) && deepClone)
+                    if (!IsSimpleType(P.Source.PropertyType) && deepClone)
                     {
-                        var assignments = CloneExpression(P.Value.Source.PropertyType, P.Value.Source.PropertyType, sourceProp, new Dictionary<string, MemberAssignment>(), PropertyMappingPredicate, true);
-                        destValue = Expression.MemberInit(Expression.New(P.Value.Dest.PropertyType), assignments);
+                        var assignments = CloneExpression(P.Source.PropertyType, P.Source.PropertyType, sourceProp, new Dictionary<string, MemberAssignment>(), PropertyMappingPredicate, true);
+                        destValue = Expression.MemberInit(Expression.New(P.Dest.PropertyType), assignments);
                     }
                     else
                     {
                         destValue = sourceProp;
                     }
 
-                    return Expression.Bind(P.Value.Dest, destValue);
+                    return Expression.Bind(P.Dest, destValue);
                 })
                 .Concat(otherBindings.Values)   //Add member asignments
                 .ToArray();

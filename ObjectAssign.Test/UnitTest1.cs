@@ -27,9 +27,9 @@ namespace ObjectAssign.Test
         [TestMethod]
         public void MapTypeTest()
         {
-            var Map = LinqEx.MapTypes(typeof(Client), typeof(ClientDTO));
+            var Map = LinqEx.MapTypes(typeof(Client), typeof(ClientDTO)).ToDictionary(x=> x.Dest.Name);
 
-            Assert.AreEqual(2, Map.Count);
+            Assert.AreEqual(2, Map.Count());
 
             Assert.AreEqual(typeof(Client).GetProperty("Name"), Map["Name"].Source);
             Assert.AreEqual(typeof(Client).GetProperty("Age"), Map["Age"].Source);
