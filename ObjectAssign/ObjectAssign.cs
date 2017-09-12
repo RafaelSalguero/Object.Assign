@@ -45,6 +45,7 @@ namespace Tonic
         /// <returns></returns>
         internal static IEnumerable<PropertyMapping> MapTypesSlow(IEnumerable<PropertyInfo> SourceProperties, IEnumerable<PropertyInfo> DestProperties)
         {
+            //Recordamos que puede haber varias propiedades con el mismo nombre, en caso de una herencia, al esconder una propiedad con otra propiedad de un tipo diferente:
             var SourceProps = SourceProperties
                 .Where(x => x.CanRead)
                 .GroupBy(x => x.Name).ToDictionary(x => x.Key, x => x.ToList());
@@ -154,6 +155,14 @@ namespace Tonic
             var combine = CombineDictionary(aBindings, bBindings);
 
             return Expression.Lambda<Func<TIn, TOut>>(Expression.MemberInit((b.Body as MemberInitExpression).NewExpression, combine.Values), param);
+        }
+
+        /// <summary>
+        /// Combine an array of member init expressions
+        /// </summary>
+        public static Expression<Func<TIn, TOut>> CombineMemberInitExpression<TIn,TOut>(params Expression<Func<TIn,TOut>>[] expressions)
+        {
+            return expressions.Aggregate((a, b) => CombineMemberInitExpression(a, b));
         }
 
 
