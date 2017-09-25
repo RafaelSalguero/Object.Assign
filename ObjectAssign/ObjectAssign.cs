@@ -220,7 +220,21 @@ namespace Tonic
                 foreach (var m in initExpressions.Values)
                 {
                     var member = m.Member;
-                    var expr = Expression.Assign(Expression.PropertyOrField(destParam, member.Name), m.Expression);
+                    Expression memberExpr;
+                    if (member is PropertyInfo prop)
+                    {
+                        memberExpr = Expression.Property(destParam, prop);
+                    }
+                    else if (member is FieldInfo field)
+                    {
+                        memberExpr = Expression.Field(destParam, field);
+                    }
+                    else
+                    {
+                        throw new ArgumentException("Member should be a field or a property");
+                    }
+
+                    var expr = Expression.Assign(memberExpr, m.Expression);
                     block.Add(expr);
                 }
 
