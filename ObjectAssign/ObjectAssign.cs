@@ -54,13 +54,15 @@ namespace Tonic
                 DestProperties
                 .Where(x => x.CanWrite) //Only writable dest properties
                 .Where(x => SourceProps.ContainsKey(x.Name))                        //Filter only properties that are both on source and dest
-                .Select(x => new {
+                .Select(x => new
+                {
                     DestProp = x,
                     SourceProps = SourceProps[x.Name].Where(src => x.PropertyType.IsAssignableFrom(src.PropertyType))// filter type-compatible properties
                 })
-                .Where(x=> x.SourceProps.Any()) //Filter out any pair without any compatible properties
-                .Select(x => 
-                new PropertyMapping {
+                .Where(x => x.SourceProps.Any()) //Filter out any pair without any compatible properties
+                .Select(x =>
+                new PropertyMapping
+                {
                     Dest = x.DestProp,
                     Source = x.SourceProps.First()
                 });
@@ -160,7 +162,7 @@ namespace Tonic
         /// <summary>
         /// Combine an array of member init expressions
         /// </summary>
-        public static Expression<Func<TIn, TOut>> CombineMemberInitExpression<TIn,TOut>(params Expression<Func<TIn,TOut>>[] expressions)
+        public static Expression<Func<TIn, TOut>> CombineMemberInitExpression<TIn, TOut>(params Expression<Func<TIn, TOut>>[] expressions)
         {
             return expressions.Aggregate((a, b) => CombineMemberInitExpression(a, b));
         }
@@ -201,7 +203,7 @@ namespace Tonic
         /// <typeparam name="TOut"></typeparam>
         /// <param name="instance"></param>
         /// <param name="memberInitialization"></param>
-        public static void PopulateObject<T, TOut>(T source, TOut dest, Expression<Func<T, TOut>> memberInitialization)
+        public static void CopyMembers<T, TOut>(T source, TOut dest, Expression<Func<T, TOut>> memberInitialization)
         {
             ParameterExpression param = Expression.Parameter(typeof(T));
             ParameterExpression destParam = Expression.Parameter(typeof(TOut));
@@ -380,6 +382,32 @@ namespace Tonic
         }
 
         /// <summary>
+        /// Return a new object by copying all properties that have the same name and type
+        /// </summary>
+        public static TOut CloneInvoke<TOut, TIn>(TIn input, Expression<Func<TIn, TOut>> otherMembers = null)
+            where TOut : new()
+        {
+            var ret = new TOut();
+            PopulateObject(input, ret);
+            if (otherMembers != null)
+                CopyMembers(input, ret, otherMembers);
+            return ret;
+        }
+
+        /// <summary>
+        /// Return a new object by copying all properties that have the same name and type and that pass the IsSimpleType filter
+        /// </summary>
+        public static TOut CloneSimpleInvoke<TOut, TIn>(TIn input, Expression<Func<TIn, TOut>> otherMembers = null)
+            where TOut : new()
+        {
+            var ret = new TOut();
+            PopulateObjectSimple(input, ret);
+            if (otherMembers != null)
+                CopyMembers(input, ret, otherMembers);
+            return ret;
+        }
+
+        /// <summary>
         /// Call the Select method from the given queryable with the clone expression
         /// </summary>
         /// <typeparam name="T"></typeparam>
@@ -403,14 +431,7 @@ namespace Tonic
         public static IEnumerable<TOut> SelectClone<T, TOut>(this IEnumerable<T> query, Expression<Func<T, TOut>> otherMembers = null)
             where TOut : new()
         {
-            return query.Select(x =>
-            {
-                var ret = new TOut();
-                PopulateObject(x, ret);
-                if (otherMembers != null)
-                    PopulateObject(x, ret, otherMembers);
-                return ret;
-            });
+            return query.Select(x => CloneInvoke(x, otherMembers));
         }
 
         /// <summary>
@@ -425,14 +446,7 @@ namespace Tonic
         public static IEnumerable<TOut> SelectCloneSimple<T, TOut>(this IEnumerable<T> query, Expression<Func<T, TOut>> otherMembers = null)
             where TOut : new()
         {
-            return query.Select(x =>
-            {
-                var ret = new TOut();
-                PopulateObjectSimple(x, ret);
-                if (otherMembers != null)
-                    PopulateObject(x, ret, otherMembers);
-                return ret;
-            });
+            return query.Select(x => CloneSimpleInvoke(x, otherMembers));
         }
 
         /// <summary>
