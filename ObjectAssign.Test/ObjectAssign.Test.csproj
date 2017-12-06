@@ -52,6 +52,7 @@
   </Choose>
   <ItemGroup>
     <Compile Include="ComplexTypeTest.cs" />
+    <Compile Include="ImmutableTest.cs" />
     <Compile Include="InheritanceTest.cs" />
     <Compile Include="SimpleTypeTest.cs" />
     <Compile Include="UnitTest1.cs" />
