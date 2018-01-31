@@ -57,6 +57,51 @@ namespace ObjectAssign.Test
         }
 
         [TestMethod]
+        public void SimpleSubstitution ()
+        {
+            var expr = Tonic.LinqEx.CloneSimple<Persona, PersonaDTO>(x => new PersonaDTO
+            {
+                Edad = 10,
+            });
+
+            var a = new Persona
+            {
+                Edad = 21,
+                Nombre = "rafa"
+            };
+
+            var b = expr.Compile().Invoke(a);
+
+            Assert.AreEqual(10, b.Edad);
+            Assert.AreEqual("rafa", b.Nombre);
+        }
+
+        [TestMethod]
+        public void SimpleSubstitutionMultiParam()
+        {
+            var expr = Tonic.LinqEx.CloneSimple<Persona, int, PersonaDTO>((x, nuevo) => new PersonaDTO
+            {
+                Edad = nuevo + 3,
+            });
+
+            var a = new Persona
+            {
+                Edad = 21,
+                Nombre = "rafa"
+            };
+
+            var b = expr.Compile().Invoke(a, 35);
+
+            Assert.AreEqual(38, b.Edad);
+            Assert.AreEqual("rafa", b.Nombre);
+
+            var c = expr.Compile().Invoke(a, 25);
+
+            Assert.AreEqual(28, c.Edad);
+            Assert.AreEqual("rafa", c.Nombre);
+        }
+
+        [TestMethod]
         public void TypeSubstitutionClone()
         {
             var expr = Tonic.LinqEx.CloneSimple<Persona, OtroDTO>(x => new OtroDTO

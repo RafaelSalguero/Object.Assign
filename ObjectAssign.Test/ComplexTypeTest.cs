@@ -110,11 +110,11 @@ namespace ObjectAssign.Test
         public void ComplexTypeExpressionTest()
         {
             var ex = Tonic.LinqEx.CloneSimple<Client, ClientDTO>();
-            Expression<Func<Client, ClientDTO>> desiredExpression = x => new ClientDTO
+            Expression<Func<Client, ClientDTO>> desiredExpression = Param_0 => new ClientDTO
             {
-                Name = x.Name,
-                Age = x.Age,
-                Address = x.Address
+                Name = Param_0.Name,
+                Age = Param_0.Age,
+                Address = Param_0.Address
             };
             Assert.AreEqual(ex.ToString(), desiredExpression.ToString());
         }

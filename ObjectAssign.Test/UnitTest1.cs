@@ -41,14 +41,16 @@ namespace ObjectAssign.Test
         [TestMethod]
         public void ExpressionBindingTest()
         {
-            var Extract = LinqEx.ExtractBindings<Client, ClientDTO>(x => new ClientDTO
+            Expression<Func<Client, ClientDTO>> lambda = x => new ClientDTO
             {
                 Age = x.Age + 20,
                 LegalDrinking = x.Name == "Rafa"
-            }, Expression.Parameter(typeof(Client), "hello"));
+            };
 
-            Assert.AreEqual("(hello.Age + 20)", Extract["Age"].Expression.ToString());
-            Assert.AreEqual("(hello.Name == \"Rafa\")", Extract["LegalDrinking"].Expression.ToString());
+            var Extract = LinqEx.ExtractBindings(lambda);
+
+            Assert.AreEqual("(x.Age + 20)", Extract["Age"].Expression.ToString());
+            Assert.AreEqual("(x.Name == \"Rafa\")", Extract["LegalDrinking"].Expression.ToString());
         }
 
         [TestMethod]

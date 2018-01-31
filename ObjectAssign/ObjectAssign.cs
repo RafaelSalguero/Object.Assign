@@ -95,25 +95,16 @@ namespace Tonic
         /// <summary>
         /// Extract a dictionary from bindings from a member initialization expression
         /// </summary>
-        /// <typeparam name="TIn">Source type</typeparam>
-        /// <typeparam name="TOut">Dest type</typeparam>
         /// <param name="expression">Member initialization expression</param>
-        /// <param name="inputParameter">Expression that will replace the input parameter of the given expression or null to not replace the input parameter</param>
         /// <returns></returns>
-        internal static Dictionary<string, MemberAssignment> ExtractBindings<TIn, TOut>(Expression<Func<TIn, TOut>> expression, Expression inputParameter = null)
+        internal static Dictionary<string, MemberAssignment> ExtractBindings(LambdaExpression expression)
         {
-            if (inputParameter == null)
-            {
-                inputParameter = expression.Parameters[0];
-            }
-
             if (!(expression.Body is MemberInitExpression))
                 throw new ArgumentException("The body of the expression isn't a member initialization expression");
 
             var MI = (MemberInitExpression)expression.Body;
 
             var result = new Dictionary<string, MemberAssignment>();
-            var replace = new ReplaceVisitor(expression.Parameters[0], inputParameter);
 
             foreach (var Binding in MI.Bindings)
             {
@@ -121,7 +112,7 @@ namespace Tonic
                     throw new ArgumentException("Only bindings of member assignment are allowed");
 
                 var BindingAux = (MemberAssignment)Binding;
-                var BindingExpr = replace.Visit(BindingAux.Expression);
+                var BindingExpr = BindingAux.Expression;
 
                 result.Add(BindingAux.Member.Name, Expression.Bind(BindingAux.Member, BindingExpr));
             }
@@ -145,27 +136,65 @@ namespace Tonic
         }
 
         /// <summary>
+        /// Replace input with output parameters
+        /// </summary>
+        static T ReplaceParameters<T>(T expression, IReadOnlyList<ParameterExpression> inputParameters, IReadOnlyList<ParameterExpression> outputParameters)
+            where T : Expression
+        {
+            if (inputParameters.Count != outputParameters.Count)
+            {
+                throw new ArgumentException(nameof(inputParameters));
+            }
+            var ret = expression;
+            for (var i = 0; i < inputParameters.Count; i++)
+            {
+                ret = (T)new ReplaceVisitor(inputParameters[i], outputParameters[i]).Visit(expression);
+            }
+            return ret;
+        }
+
+        static Expression<Func<T1, TR>> TypeLambda<T1, TR>(LambdaExpression lambda) => Expression.Lambda<Func<T1, TR>>(lambda.Body, lambda.Parameters);
+        static Expression<Func<T1, T2, TR>> TypeLambda<T1, T2, TR>(LambdaExpression lambda) => Expression.Lambda<Func<T1, T2, TR>>(lambda.Body, lambda.Parameters);
+        static Expression<Func<T1, T2, T3, TR>> TypeLambda<T1, T2, T3, TR>(LambdaExpression lambda) => Expression.Lambda<Func<T1, T2, T3, TR>>(lambda.Body, lambda.Parameters);
+        static Expression<Func<T1, T2, T3, T4, TR>> TypeLambda<T1, T2, T3, T4, TR>(LambdaExpression lambda) => Expression.Lambda<Func<T1, T2, T3, T4, TR>>(lambda.Body, lambda.Parameters);
+
+        public static Expression<Func<T1, TR>> CombineMemberInitExpression<T1, TR>(Expression<Func<T1, TR>> a, Expression<Func<T1, TR>> b) => TypeLambda<T1, TR>(CombineMemberInitExpression((LambdaExpression)a, b));
+        public static Expression<Func<T1, T2, TR>> CombineMemberInitExpression<T1, T2, TR>(Expression<Func<T1, T2, TR>> a, Expression<Func<T1, T2, TR>> b) => TypeLambda<T1, T2, TR>(CombineMemberInitExpression((LambdaExpression)a, b));
+        public static Expression<Func<T1, T2, T3, TR>> CombineMemberInitExpression<T1, T2, T3, TR>(Expression<Func<T1, T2, T3, TR>> a, Expression<Func<T1, T2, T3, TR>> b) => TypeLambda<T1, T2, T3, TR>(CombineMemberInitExpression((LambdaExpression)a, b));
+        public static Expression<Func<T1, T2, T3, T4, TR>> CombineMemberInitExpression<T1, T2, T3, T4, TR>(Expression<Func<T1, T2, T3, T4, TR>> a, Expression<Func<T1, T2, T3, T4, TR>> b) => TypeLambda<T1, T2, T3, T4, TR>(CombineMemberInitExpression((LambdaExpression)a, b));
+
+
+        /// <summary>
         /// Combie two member initialization expressions. The second expression takes precedence over the first one if the same property initializer is present on both expressions
         /// </summary>
         /// <returns></returns>
-        public static Expression<Func<TIn, TOut>> CombineMemberInitExpression<TIn, TOut>(Expression<Func<TIn, TOut>> a, Expression<Func<TIn, TOut>> b)
+        public static LambdaExpression CombineMemberInitExpression(LambdaExpression a, LambdaExpression b)
         {
-            var param = Expression.Parameter(typeof(TIn), "x");
-            var aBindings = ExtractBindings(a, param);
-            var bBindings = ExtractBindings(b, param);
+            if (!a.Parameters.Select(x => x.Type).SequenceEqual(b.Parameters.Select(x => x.Type)))
+            {
+                throw new ArgumentException("Expressions input parameters must match");
+            }
+            if (a.ReturnType != b.ReturnType)
+            {
+                throw new ArgumentException("Expressions return types must match ");
+            }
+
+            var outputParameters = a.Parameters.Select(x => Expression.Parameter(x.Type)).ToList();
+            var aBindings = ExtractBindings(ReplaceParameters(a, a.Parameters, outputParameters));
+            var bBindings = ExtractBindings(ReplaceParameters(b, b.Parameters, outputParameters));
+
 
             var combine = CombineDictionary(aBindings, bBindings);
 
-            return Expression.Lambda<Func<TIn, TOut>>(Expression.MemberInit((b.Body as MemberInitExpression).NewExpression, combine.Values), param);
+            var expr = Expression.MemberInit((b.Body as MemberInitExpression).NewExpression, combine.Values);
+
+            return Expression.Lambda(expr, outputParameters);
         }
 
-        /// <summary>
-        /// Combine an array of member init expressions
-        /// </summary>
-        public static Expression<Func<TIn, TOut>> CombineMemberInitExpression<TIn, TOut>(params Expression<Func<TIn, TOut>>[] expressions)
-        {
-            return expressions.Aggregate((a, b) => CombineMemberInitExpression(a, b));
-        }
+        public static Expression<Func<T1, TOut>> CombineMemberInitExpression<T1, TOut>(params Expression<Func<T1, TOut>>[] expressions) => expressions.Aggregate((a, b) => CombineMemberInitExpression(a, b));
+        public static Expression<Func<T1, T2, TOut>> CombineMemberInitExpression<T1, T2, TOut>(params Expression<Func<T1, T2, TOut>>[] expressions) => expressions.Aggregate((a, b) => CombineMemberInitExpression(a, b));
+        public static Expression<Func<T1, T2, T3, TOut>> CombineMemberInitExpression<T1, T2, T3, TOut>(params Expression<Func<T1, T2, T3, TOut>>[] expressions) => expressions.Aggregate((a, b) => CombineMemberInitExpression(a, b));
+        public static Expression<Func<T1, T2, T3, T4, TOut>> CombineMemberInitExpression<T1, T2, T3, T4, TOut>(params Expression<Func<T1, T2, T3, T4, TOut>>[] expressions) => expressions.Aggregate((a, b) => CombineMemberInitExpression(a, b));
 
 
         /// <summary>
@@ -207,7 +236,7 @@ namespace Tonic
         {
             ParameterExpression param = Expression.Parameter(typeof(T));
             ParameterExpression destParam = Expression.Parameter(typeof(TOut));
-            var initExpressions = ExtractBindings(memberInitialization, param);
+            var initExpressions = ExtractBindings(ReplaceParameters(memberInitialization, memberInitialization.Parameters, new[] { param }));
             Action<T, TOut> result;
 
             if (initExpressions.Count == 0)
@@ -342,57 +371,96 @@ namespace Tonic
             return Binds;
         }
 
+
+
+        public static Expression<Func<T1, TR>> Clone<T1, TR>(Expression<Func<T1, TR>> otherMembers, Func<PropertyMapping, bool> PropertyMappingPredicate, bool deepClone = false) =>
+            TypeLambda<T1, TR>(Clone((LambdaExpression)otherMembers, PropertyMappingPredicate, deepClone));
+        public static Expression<Func<T1, T2, TR>> Clone<T1, T2, TR>(Expression<Func<T1, T2, TR>> otherMembers, Func<PropertyMapping, bool> PropertyMappingPredicate, bool deepClone = false) => TypeLambda<T1, T2, TR>(Clone((LambdaExpression)otherMembers, PropertyMappingPredicate, deepClone));
+        public static Expression<Func<T1, T2, T3, TR>> Clone<T1, T2, T3, TR>(Expression<Func<T1, T2, T3, TR>> otherMembers, Func<PropertyMapping, bool> PropertyMappingPredicate, bool deepClone = false) => TypeLambda<T1, T2, T3, TR>(Clone((LambdaExpression)otherMembers, PropertyMappingPredicate, deepClone));
+        public static Expression<Func<T1, T2, T3, T4, TR>> Clone<T1, T2, T3, T4, TR>(Expression<Func<T1, T2, T3, T4, TR>> otherMembers, Func<PropertyMapping, bool> PropertyMappingPredicate, bool deepClone = false) => TypeLambda<T1, T2, T3, T4, TR>(Clone((LambdaExpression)otherMembers, PropertyMappingPredicate, deepClone));
+
+
         /// <summary>
         /// Create an expression that initialize an object of type TOut with all properties of type TIn using the member initizer sintax
         /// The user can override or add new member bindings
         /// </summary>
-        /// <typeparam name="TIn">The source type</typeparam>
-        /// <typeparam name="TOut">The object of the type that will be member initialized</typeparam>
         /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
         /// <param name="PropertyMappingPredicate">After the properties where matched by type and name, a filter with this predicate is applied to the property mappings</param>
         /// <param name="deepClone">True to generate a deep clone expression, false for shallow clone</param>
         /// <returns></returns>
-        public static Expression<Func<TIn, TOut>> Clone<TIn, TOut>(
-            Expression<Func<TIn, TOut>> otherMembers,
+        public static LambdaExpression Clone(
+            LambdaExpression otherMembers,
             Func<PropertyMapping, bool> PropertyMappingPredicate,
             bool deepClone = false)
         {
-            var param = Expression.Parameter(typeof(TIn), "x");
-            var otherBindings = otherMembers == null ? new Dictionary<string, MemberAssignment>() : ExtractBindings(otherMembers, param);
+            if (otherMembers == null)
+            {
+                throw new ArgumentNullException(nameof(otherMembers));
+            }
+            var outputParams = otherMembers.Parameters.Select(x => Expression.Parameter(x.Type)).ToList();
+            var otherBindings = otherMembers == null ? new Dictionary<string, MemberAssignment>() : ExtractBindings(ReplaceParameters(otherMembers, otherMembers.Parameters, outputParams));
 
-            var binds = CloneExpression(typeof(TIn), typeof(TOut), param, otherBindings, PropertyMappingPredicate, deepClone);
-            var body = Expression.MemberInit(Expression.New(typeof(TOut)), binds);
 
-            return Expression.Lambda<Func<TIn, TOut>>(body, param);
+            var InputType = otherMembers.Parameters[0].Type;
+            var OutputType = otherMembers.ReturnType;
+
+            var binds = CloneExpression(InputType, OutputType, outputParams[0], otherBindings, PropertyMappingPredicate, deepClone);
+            var body = Expression.MemberInit(Expression.New(OutputType), binds);
+
+            return Expression.Lambda(body, outputParams);
         }
 
-        /// <summary>
-        /// Create an expression that initialize an object of type TOut with all properties of type TIn using the member initizer sintax
-        /// The user can override or add new member bindings.
-        /// This is a shallow clone
-        /// </summary>
-        /// <typeparam name="TIn">The source type</typeparam>
-        /// <typeparam name="TOut">The object of the type that will be member initialized</typeparam>
-        /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
-        /// <returns></returns>
-        public static Expression<Func<TIn, TOut>> Clone<TIn, TOut>(Expression<Func<TIn, TOut>> otherMembers = null)
+        public static Expression<Func<T1, TOut>> Clone<T1, TOut>(Expression<Func<T1, TOut>> otherMembers = null)
+            where TOut : new()
         {
-            return Clone(otherMembers, x => true, false);
+            Expression<Func<T1, TOut>> def = x => new TOut { };
+            return Clone(otherMembers ?? def, x => true, false);
         }
 
-        /// <summary>
-        /// Returns an expression that clone all simple types properties and
-        /// deep clone properties with types with the ComplexType attribute.
-        /// 
-        /// Use this expression inside a Select to perform a SelectCloneSimple
-        /// </summary>
-        /// <typeparam name="TIn"></typeparam>
-        /// <typeparam name="TOut"></typeparam>
-        /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
-        /// <returns></returns>
-        public static Expression<Func<TIn, TOut>> CloneSimple<TIn, TOut>(Expression<Func<TIn, TOut>> otherMembers = null)
+        public static Expression<Func<T1, T2, TOut>> Clone<T1, T2, TOut>(Expression<Func<T1, T2, TOut>> otherMembers = null)
+            where TOut : new()
         {
-            return Clone(otherMembers, SimplePropertyMappingPredicate, false);
+            Expression<Func<T1, T2, TOut>> def = (x0, x1) => new TOut { };
+            return Clone(otherMembers ?? def, x => true, false);
+        }
+
+        public static Expression<Func<T1, T2, T3, TOut>> Clone<T1, T2, T3, TOut>(Expression<Func<T1, T2, T3, TOut>> otherMembers = null)
+            where TOut : new()
+        {
+            Expression<Func<T1, T2, T3, TOut>> def = (x0, x1, x2) => new TOut { };
+            return Clone(otherMembers ?? def, x => true, false);
+        }
+
+        public static Expression<Func<T1, T2, T3, T4, TOut>> Clone<T1, T2, T3, T4, TOut>(Expression<Func<T1, T2, T3, T4, TOut>> otherMembers = null)
+            where TOut : new()
+        {
+            Expression<Func<T1, T2, T3, T4, TOut>> def = (x0, x1, x2, x3) => new TOut { };
+            return Clone(otherMembers ?? def, x => true, false);
+        }
+
+        public static Expression<Func<T1, TOut>> CloneSimple<T1, TOut>(Expression<Func<T1, TOut>> otherMembers = null)
+            where TOut : new()
+        {
+            Expression<Func<T1, TOut>> def = x => new TOut { };
+            return Clone(otherMembers ?? def, SimplePropertyMappingPredicate, false);
+        }
+        public static Expression<Func<T1, T2, TOut>> CloneSimple<T1, T2, TOut>(Expression<Func<T1, T2, TOut>> otherMembers = null)
+            where TOut : new()
+        {
+            Expression<Func<T1, T2, TOut>> def = (x0, x1) => new TOut { };
+            return Clone(otherMembers ?? def, SimplePropertyMappingPredicate, false);
+        }
+        public static Expression<Func<T1, T2, T3, TOut>> CloneSimple<T1, T2, T3, TOut>(Expression<Func<T1, T2, T3, TOut>> otherMembers = null)
+        where TOut : new()
+        {
+            Expression<Func<T1, T2, T3, TOut>> def = (x0, x1, x2) => new TOut { };
+            return Clone(otherMembers ?? def, SimplePropertyMappingPredicate, false);
+        }
+        public static Expression<Func<T1, T2, T3, T4, TOut>> CloneSimple<T1, T2, T3, T4, TOut>(Expression<Func<T1, T2, T3, T4, TOut>> otherMembers = null)
+            where TOut : new()
+        {
+            Expression<Func<T1, T2, T3, T4, TOut>> def = (x0, x1, x2, x3) => new TOut { };
+            return Clone(otherMembers ?? def, SimplePropertyMappingPredicate, false);
         }
 
         /// <summary>
@@ -430,6 +498,7 @@ namespace Tonic
         /// <param name="otherMembers">Override or add new member initialization that are not part of the mapping between types. If null only properties with the same name and type will be assigned</param>
         /// <returns></returns>
         public static IQueryable<TOut> SelectClone<T, TOut>(this IQueryable<T> query, Expression<Func<T, TOut>> otherMembers = null)
+            where TOut : new()
         {
             return query.Select(Clone(otherMembers));
         }
