@@ -43,14 +43,14 @@ namespace ObjectAssign.Test
         {
             Expression<Func<Client, ClientDTO>> a = x => new ClientDTO
             {
-                 Name = "Hello " + x.Name,
-                 Age = x.Age
+                Name = "Hello " + x.Name,
+                Age = x.Age
             };
 
             Expression<Func<Client, ClientDTO>> b = x => new ClientDTO
             {
-                 LegalDrinking = true,
-                 Age = x.Age + 1
+                LegalDrinking = true,
+                Age = x.Age + 1
             };
 
             var comb = LinqEx.CombineMemberInitExpression(a, b);
@@ -64,6 +64,34 @@ namespace ObjectAssign.Test
             Assert.AreEqual(21, res.Age);
             Assert.AreEqual(true, res.LegalDrinking);
         }
+
+        [TestMethod]
+        public void CombineMemberInitTestMultiParam()
+        {
+            Expression<Func<Client, int, ClientDTO>> a = (x, y) => new ClientDTO
+            {
+                Name = "Hello " + x.Name + " " + y,
+                Age = x.Age
+            };
+
+            Expression<Func<Client, int, ClientDTO>> b = (x, y) => new ClientDTO
+            {
+                LegalDrinking = true,
+                Age = x.Age + y
+            };
+
+            var comb = LinqEx.CombineMemberInitExpression(a, b);
+            var res = comb.Compile()(new Client
+            {
+                Name = "Rafael",
+                Age = 20,
+            }, 3);
+
+            Assert.AreEqual("Hello Rafael 3", res.Name);
+            Assert.AreEqual(23, res.Age);
+            Assert.AreEqual(true, res.LegalDrinking);
+        }
+
 
         [TestMethod]
         public void PopulateObject()
@@ -110,7 +138,7 @@ namespace ObjectAssign.Test
 
                 };
 
-            var Ret1 = Clients.SelectClone(x => new ClientDTO {  }).First();
+            var Ret1 = Clients.SelectClone(x => new ClientDTO { }).First();
             Assert.AreEqual(Clients.First().Name, Ret1.Name);
             Assert.AreEqual(Clients.First().Age, Ret1.Age);
             Assert.AreEqual(Clients.First().NotSimple, Ret1.NotSimple);
@@ -130,7 +158,7 @@ namespace ObjectAssign.Test
 
                 };
 
-            var Ret1 = Clients.SelectCloneSimple(x => new ClientDTO {  }).First();
+            var Ret1 = Clients.SelectCloneSimple(x => new ClientDTO { }).First();
             Assert.AreEqual(Clients.First().Name, Ret1.Name);
             Assert.AreEqual(Clients.First().Age, Ret1.Age);
             Assert.AreEqual(null, Ret1.NotSimple);

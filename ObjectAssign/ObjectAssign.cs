@@ -148,7 +148,7 @@ namespace Tonic
             var ret = expression;
             for (var i = 0; i < inputParameters.Count; i++)
             {
-                ret = (T)new ReplaceVisitor(inputParameters[i], outputParameters[i]).Visit(expression);
+                ret = (T)new ReplaceVisitor(inputParameters[i], outputParameters[i]).Visit(ret);
             }
             return ret;
         }
@@ -179,7 +179,7 @@ namespace Tonic
                 throw new ArgumentException("Expressions return types must match ");
             }
 
-            var outputParameters = a.Parameters.Select(x => Expression.Parameter(x.Type)).ToList();
+            var outputParameters = a.Parameters.Select(x => Expression.Parameter(x.Type, x.Name + "_2")).ToList();
             var aBindings = ExtractBindings(ReplaceParameters(a, a.Parameters, outputParameters));
             var bBindings = ExtractBindings(ReplaceParameters(b, b.Parameters, outputParameters));
 
